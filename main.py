@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from ui_main import MainUI
+from inflation_module import open_inflation_window
 
 
 class MainMenu:
@@ -25,7 +26,7 @@ class MainMenu:
         btn1.pack(pady=8)
 
         # Кнопка 2 — одногруппник 1
-        btn2 = tk.Button(self.root, text="Глинков (Вариант ?)",
+        btn2 = tk.Button(self.root, text="Глинков (Вариант 10)",
                          font=("Arial", 11), width=35, height=2,
                          command=self._open_variant_2)
         btn2.pack(pady=8)
@@ -44,7 +45,7 @@ class MainMenu:
         MainUI(self.root)
 
     def _open_variant_2(self):
-        messagebox.showinfo("В разработке", "Модуль 1")
+        open_inflation_window(self.root)
 
     def _open_variant_3(self):
         messagebox.showinfo("В разработке", "Модуль 2")
