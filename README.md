@@ -27,8 +27,15 @@ lab3\_TP\_Main
 
 # \- inflation_module.py - модуль отображения инфляции
 
+# \-  currency_module.py - модуль анализа курса валют
+
+# \- currency_menu.py - меню для работы с модулем анализа курса валют
+
 # \- go_module - папка с GO-файлами и exe и linux-приложением для работы с инфляцией
 
 # \- go_module\main.go - логика обработки данных инфляции
 
 # \- data\inflation_russia.csv - данные по инфляции
+
+# \- data\currency_data.csv - данные по валютам
+

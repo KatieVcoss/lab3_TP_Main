@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from ui_main import MainUI
 from inflation_module import open_inflation_window
-
+from currency_menu import open_currency_module
 
 class MainMenu:
     def __init__(self):
@@ -32,7 +32,7 @@ class MainMenu:
         btn2.pack(pady=8)
 
         # Кнопка 3 — одногруппник 2
-        btn3 = tk.Button(self.root, text="Коржова (Вариант ?)",
+        btn3 = tk.Button(self.root, text="Коржова (Вариант 2)",
                          font=("Arial", 11), width=35, height=2,
                          command=self._open_variant_3)
         btn3.pack(pady=8)
@@ -48,7 +48,7 @@ class MainMenu:
         open_inflation_window(self.root)
 
     def _open_variant_3(self):
-        messagebox.showinfo("В разработке", "Модуль 2")
+        open_currency_module(self.root)
 
     def run(self):
         self.root.mainloop()
