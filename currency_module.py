@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
+from datetime import timedelta
 import os
 # Анализ курсов валют: вариант 2
 class CurrencyAnalyzer:
@@ -181,3 +181,65 @@ class Task1Graph:
             self.fig.savefig(filepath, dpi=150)
             messagebox.showinfo("Сохранено", f"График сохранён в {filepath}")
 
+class Task2Forecast:
+# Задание 2: Прогноз скользящей средней на N дней
+    def __init__(self, window_size, steps):
+        self.window = tk.Toplevel()
+        self.window.title(f"Прогноз курсов валют (окно={window_size}, шагов={steps})")
+        self.window.geometry("1000x600")
+        self.analyzer = CurrencyAnalyzer()
+        self.window_size = window_size
+        self.steps = steps
+        self._build()
+
+    def _build(self):
+        # Загрузка файла
+        tk.Button(self.window, text=" Загрузить CSV", command=self.load_and_forecast).pack(pady=5)
+        self.graph_frame = tk.LabelFrame(self.window, text="Результат прогноза")
+        self.graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.fig, self.ax = plt.subplots(figsize=(8,4))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        btn_back = tk.Button(self.window, text="← Назад", command=self.window.destroy, width=15)
+        btn_back.pack(pady=10)
+
+    def load_and_forecast(self):
+        filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not filepath:
+            return
+        try:
+            self.analyzer.load_file(filepath)
+            self.make_forecast()
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+
+    def make_forecast(self):
+        df = self.analyzer.get_table_data()
+        currency_cols = self.analyzer.get_currency_names()
+        self.ax.clear()
+        # Исторические данные
+        for col in currency_cols:
+            self.ax.plot(df['date'], df[col], marker='o', label=f'{col.upper()} (история)')
+        # Прогноз
+        last_date = df['date'].iloc[-1]
+        pred_dates = [last_date + timedelta(days=i+1) for i in range(self.steps)]
+        for col in currency_cols:
+            pred_vals = self.analyzer.moving_average_forecast(col, self.window_size, self.steps)
+            self.ax.plot(pred_dates, pred_vals, '--', linewidth=2, label=f'{col.upper()} (прогноз)')
+        self.ax.set_xlabel('Дата')
+        self.ax.set_ylabel('Курс')
+        self.ax.set_title(f'Скользящая средняя (окно={self.window_size}), прогноз на {self.steps} дней')
+        self.ax.legend()
+        self.ax.grid(True)
+        self.fig.autofmt_xdate()
+        self.canvas.draw()
+        # Кнопка экспорта
+        btn_export = tk.Button(self.window, text=" Сохранить график", command=self.export_plot)
+        btn_export.pack(pady=5)
+
+    def export_plot(self):
+        filepath = filedialog.asksaveasfilename(defaultextension=".png",
+                                                 filetypes=[("PNG", "*.png"), ("PDF", "*.pdf")])
+        if filepath:
+            self.fig.savefig(filepath, dpi=150)
+            messagebox.showinfo("Сохранено", f"График прогноза сохранён")
