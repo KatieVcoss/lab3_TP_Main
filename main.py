@@ -32,7 +32,7 @@ class MainMenu:
         btn2.pack(pady=8)
 
         # Кнопка 3 — одногруппник 2
-        btn3 = tk.Button(self.root, text="Коржова (Вариант ?)",
+        btn3 = tk.Button(self.root, text="Коржова (Вариант 2)",
                          font=("Arial", 11), width=35, height=2,
                          command=self._open_variant_3)
         btn3.pack(pady=8)
