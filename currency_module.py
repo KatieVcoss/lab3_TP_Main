@@ -1,66 +1,117 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import pandas as pd
+import csv
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from datetime import timedelta
 import os
-# Анализ курсов валют: вариант 2
+# Анализ курсов валют: вариант 2 без пандас
 class CurrencyAnalyzer:
     def __init__(self):
-        self.df = None
-        self.currency_cols = []  # два названия колонок
+        self.data = []  # список словарей {date: datetime, usd: float, eur: float}
+        self.currency_cols = []  # названия валютных колонок
+        self.dates = []  # список дат для графика
+        self.currency_data = {}  # {col: [values]}
 
-    def load_file(self, filepath): # загрузка файлов с колонками date, валюта1, валюта2
-        df = pd.read_csv(filepath)
-        df.columns = [c.lower().strip() for c in df.columns]
-        if 'date' not in df.columns:
-            raise ValueError("Файл должен содержать колонку 'date'")
-        df['date'] = pd.to_datetime(df['date'])
-        # Взять первые две числовые колонки (кроме даты)
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        if len(numeric_cols) < 2:
-            raise ValueError("Нужно минимум две колонки с курсами валют")
-        self.currency_cols = numeric_cols[:2]
-        self.df = df
+    def load_file(self, filepath):
+        rows = []
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            headers = [h.lower().strip() for h in reader.fieldnames]
+            if 'date' not in headers:
+                raise ValueError("Файл должен содержать колонку 'date'")
+            # Определить числовые колонки (первые две, кроме date)
+            numeric_cols = []
+            for col in headers:
+                if col != 'date':
+                    numeric_cols.append(col)
+                    if len(numeric_cols) == 2:
+                        break
+            if len(numeric_cols) < 2:
+                raise ValueError("Нужно минимум две колонки с курсами валют")
+            self.currency_cols = numeric_cols
+
+            for row in reader:
+                new_row = {}
+                for h in headers:
+                    val = row[h].strip()
+                    if h == 'date':
+                        new_row['date'] = datetime.strptime(val, '%Y-%m-%d')
+                    elif h in numeric_cols:
+                        new_row[h] = float(val)
+                rows.append(new_row)
+
+        # Сортировка по дате
+        rows.sort(key=lambda x: x['date'])
+        self.data = rows
+
+        # Формирование данных для графиков
+        self.dates = [r['date'] for r in self.data]
+        self.currency_data = {}
+        for col in self.currency_cols:
+            self.currency_data[col] = [r[col] for r in self.data]
+
         return True
 
     def get_table_data(self):
-        return self.df
+        return self.data
+
+    def get_dates(self):
+        return self.dates
 
     def get_currency_names(self):
         return self.currency_cols
 
+    def get_currency_values(self, col):
+        return self.currency_data[col]
+
     def daily_changes(self):
-        changes = pd.DataFrame()
-        for col in self.currency_cols:
-            changes[f'{col}_abs'] = self.df[col].diff()
-            changes[f'{col}_pct'] = self.df[col].pct_change() * 100
-        changes['date'] = self.df['date']
-        return changes # вернуть DataFrame с абс и процентными изменениями для каждой валюты
+       # список изменений по дням
+        changes = []
+        for i in range(1, len(self.data)):
+            change = {'date': self.data[i]['date']}
+            for col in self.currency_cols:
+                prev_val = self.data[i - 1][col]
+                curr_val = self.data[i][col]
+                abs_diff = curr_val - prev_val
+                pct_diff = (abs_diff / prev_val) * 100 if prev_val != 0 else 0
+                change[f'{col}_abs'] = abs_diff
+                change[f'{col}_pct'] = pct_diff
+            changes.append(change)
+        return changes
 
     def max_increase_decrease(self):
-        # Для каждой валюты: дата макс прироста, абс_прирост, пкт_прирост,
-        # дата макс падения, абс_падение, пкт_падение
         changes = self.daily_changes()
         result = {}
         for col in self.currency_cols:
-            # Прирост
-            abs_inc = changes[f'{col}_abs'].max()
-            date_inc = changes.loc[changes[f'{col}_abs'].idxmax(), 'date'].strftime('%Y-%m-%d')
-            pct_inc = changes.loc[changes[f'{col}_abs'].idxmax(), f'{col}_pct']
-            # Падение
-            abs_dec = changes[f'{col}_abs'].min()
-            date_dec = changes.loc[changes[f'{col}_abs'].idxmin(), 'date'].strftime('%Y-%m-%d')
-            pct_dec = changes.loc[changes[f'{col}_abs'].idxmin(), f'{col}_pct']
+            max_inc = None
+            max_inc_date = None
+            max_inc_pct = None
+            min_dec = None
+            min_dec_date = None
+            min_dec_pct = None
+
+            for ch in changes:
+                abs_val = ch[f'{col}_abs']
+                pct_val = ch[f'{col}_pct']
+                if max_inc is None or abs_val > max_inc:
+                    max_inc = abs_val
+                    max_inc_date = ch['date']
+                    max_inc_pct = pct_val
+                if min_dec is None or abs_val < min_dec:
+                    min_dec = abs_val
+                    min_dec_date = ch['date']
+                    min_dec_pct = pct_val
+
             result[col] = {
-                'max_inc': (date_inc, abs_inc, pct_inc),
-                'max_dec': (date_dec, abs_dec, pct_dec)
+                'max_inc': (max_inc_date.strftime('%Y-%m-%d'), max_inc, max_inc_pct),
+                'max_dec': (min_dec_date.strftime('%Y-%m-%d'), min_dec, min_dec_pct)
             }
         return result
 
     def moving_average_forecast(self, col, window, steps):
-        series = self.df[col].tolist()
+        """Прогноз скользящей средней на steps шагов"""
+        series = self.currency_data[col].copy()
         if len(series) < window:
             raise ValueError(f"Окно {window} больше данных ({len(series)})")
         forecast = []
@@ -69,7 +120,7 @@ class CurrencyAnalyzer:
             avg = sum(data[-window:]) / window
             forecast.append(avg)
             data.append(avg)
-        return forecast # список прогнозных значений на steps шагов (скользящая средняя)
+        return forecast
 
 #  Классы интерфейса
 class Task1Graph:
@@ -133,23 +184,26 @@ class Task1Graph:
     def show_table(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
-        df = self.analyzer.get_table_data()
-        cols = list(df.columns)
+        data = self.analyzer.get_table_data()
+        if not data:
+            return
+        cols = ['date'] + self.analyzer.get_currency_names()
         self.tree['columns'] = cols
         self.tree['show'] = 'headings'
         for col in cols:
             self.tree.heading(col, text=col.upper())
-            self.tree.column(col, width=100, anchor='center')
-        for _, row in df.iterrows():
-            values = [row[col] for col in cols]
+            self.tree.column(col, width=120, anchor='center')
+        for row in data:
+            values = [row['date'].strftime('%Y-%m-%d')] + [f"{row[col]:.4f}" for col in
+                                                           self.analyzer.get_currency_names()]
             self.tree.insert('', tk.END, values=values)
 
     def plot_graph(self):
         self.ax.clear()
-        df = self.analyzer.get_table_data()
-        currency_cols = self.analyzer.get_currency_names()
-        for col in currency_cols:
-            self.ax.plot(df['date'], df[col], marker='o', label=col.upper())
+        dates = self.analyzer.get_dates()
+        for col in self.analyzer.get_currency_names():
+            values = self.analyzer.get_currency_values(col)
+            self.ax.plot(dates, values, marker='o', label=col.upper())
         self.ax.set_xlabel('Дата')
         self.ax.set_ylabel('Курс')
         self.ax.set_title('Динамика курсов валют')
@@ -214,18 +268,19 @@ class Task2Forecast:
             messagebox.showerror("Ошибка", str(e))
 
     def make_forecast(self):
-        df = self.analyzer.get_table_data()
+        dates = self.analyzer.get_dates()
         currency_cols = self.analyzer.get_currency_names()
         self.ax.clear()
-        # Исторические данные
         for col in currency_cols:
-            self.ax.plot(df['date'], df[col], marker='o', label=f'{col.upper()} (история)')
-        # Прогноз
-        last_date = df['date'].iloc[-1]
-        pred_dates = [last_date + timedelta(days=i+1) for i in range(self.steps)]
+            values = self.analyzer.get_currency_values(col)
+            self.ax.plot(dates, values, marker='o', label=f'{col.upper()} (история)')
+
+        last_date = dates[-1]
+        pred_dates = [last_date + timedelta(days=i + 1) for i in range(self.steps)]
         for col in currency_cols:
             pred_vals = self.analyzer.moving_average_forecast(col, self.window_size, self.steps)
             self.ax.plot(pred_dates, pred_vals, '--', linewidth=2, label=f'{col.upper()} (прогноз)')
+
         self.ax.set_xlabel('Дата')
         self.ax.set_ylabel('Курс')
         self.ax.set_title(f'Скользящая средняя (окно={self.window_size}), прогноз на {self.steps} дней')
@@ -233,7 +288,7 @@ class Task2Forecast:
         self.ax.grid(True)
         self.fig.autofmt_xdate()
         self.canvas.draw()
-        # Кнопка экспорта
+
         btn_export = tk.Button(self.window, text=" Сохранить график", command=self.export_plot)
         btn_export.pack(pady=5)
 
@@ -291,15 +346,19 @@ class Task3Report:
     def show_table(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
-        df = self.analyzer.get_table_data()
-        cols = list(df.columns)
+        data = self.analyzer.get_table_data()
+        if not data:
+            return
+        cols = ['date'] + self.analyzer.get_currency_names()
         self.tree['columns'] = cols
         self.tree['show'] = 'headings'
         for col in cols:
             self.tree.heading(col, text=col.upper())
-            self.tree.column(col, width=100, anchor='center')
-        for _, row in df.iterrows():
-            self.tree.insert('', tk.END, values=[row[col] for col in cols])
+            self.tree.column(col, width=120, anchor='center')
+        for row in data:
+            values = [row['date'].strftime('%Y-%m-%d')] + [f"{row[col]:.4f}" for col in
+                                                           self.analyzer.get_currency_names()]
+            self.tree.insert('', tk.END, values=values)
 
     def show_stats(self):
         stats = self.analyzer.max_increase_decrease()
@@ -316,5 +375,12 @@ class Task3Report:
     def export_csv(self):
         filepath = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if filepath:
-            self.analyzer.df.to_csv(filepath, index=False)
+            data = self.analyzer.get_table_data()
+            with open(filepath, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                headers = ['date'] + self.analyzer.get_currency_names()
+                writer.writerow(headers)
+                for row in data:
+                    writer.writerow(
+                        [row['date'].strftime('%Y-%m-%d')] + [row[col] for col in self.analyzer.get_currency_names()])
             messagebox.showinfo("Экспорт", f"Таблица сохранена в {filepath}")
