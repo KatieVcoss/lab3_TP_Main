@@ -243,3 +243,78 @@ class Task2Forecast:
         if filepath:
             self.fig.savefig(filepath, dpi=150)
             messagebox.showinfo("Сохранено", f"График прогноза сохранён")
+
+class Task3Report:
+# Задание 3: отчет и экспорт
+    def __init__(self):
+        self.window = tk.Toplevel()
+        self.window.title("Отчёт по курсам валют")
+        self.window.geometry("1000x700")
+        self.analyzer = CurrencyAnalyzer()
+        self._build()
+
+    def _build(self):
+        tk.Button(self.window, text=" Загрузить CSV", command=self.load_and_show).pack(pady=5)
+
+        self.table_frame = tk.Frame(self.window)
+        self.table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.tree = ttk.Treeview(self.table_frame)
+        vsb = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(self.table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        self.table_frame.grid_rowconfigure(0, weight=1)
+        self.table_frame.grid_columnconfigure(0, weight=1)
+
+        self.stats_text = tk.Text(self.window, height=8, state=tk.DISABLED)
+        self.stats_text.pack(fill=tk.X, padx=10, pady=5)
+
+        self.export_btn = tk.Button(self.window, text=" Экспорт таблицы в CSV", command=self.export_csv, state=tk.DISABLED)
+        self.export_btn.pack(pady=5)
+        btn_back = tk.Button(self.window, text="← Назад", command=self.window.destroy, width=15)
+        btn_back.pack(pady=10)
+
+    def load_and_show(self):
+        filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not filepath:
+            return
+        try:
+            self.analyzer.load_file(filepath)
+            self.show_table()
+            self.show_stats()
+            self.export_btn.config(state=tk.NORMAL)
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+
+    def show_table(self):
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        df = self.analyzer.get_table_data()
+        cols = list(df.columns)
+        self.tree['columns'] = cols
+        self.tree['show'] = 'headings'
+        for col in cols:
+            self.tree.heading(col, text=col.upper())
+            self.tree.column(col, width=100, anchor='center')
+        for _, row in df.iterrows():
+            self.tree.insert('', tk.END, values=[row[col] for col in cols])
+
+    def show_stats(self):
+        stats = self.analyzer.max_increase_decrease()
+        text = " Статистика по варианту 2:\n"
+        for curr, data in stats.items():
+            inc_date, inc_abs, inc_pct = data['max_inc']
+            dec_date, dec_abs, dec_pct = data['max_dec']
+            text += f"\n{curr.upper()}:\n  Прирост: {inc_abs:.2f} ({inc_pct:.2f}%) — {inc_date}\n  Падение: {dec_abs:.2f} ({dec_pct:.2f}%) — {dec_date}\n"
+        self.stats_text.config(state=tk.NORMAL)
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.insert(tk.END, text)
+        self.stats_text.config(state=tk.DISABLED)
+
+    def export_csv(self):
+        filepath = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if filepath:
+            self.analyzer.df.to_csv(filepath, index=False)
+            messagebox.showinfo("Экспорт", f"Таблица сохранена в {filepath}")
