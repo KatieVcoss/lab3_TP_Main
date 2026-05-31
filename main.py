@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from ui_main import MainUI
 from inflation_module import open_inflation_window
-
+from currency_menu import open_currency_module
 
 class MainMenu:
     def __init__(self):
@@ -48,7 +48,7 @@ class MainMenu:
         open_inflation_window(self.root)
 
     def _open_variant_3(self):
-        messagebox.showinfo("В разработке", "Модуль 2")
+        open_currency_module(self.root)
 
     def run(self):
         self.root.mainloop()
